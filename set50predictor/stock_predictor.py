@@ -20,16 +20,31 @@ import os.path, time
 import datetime
 
 def get_stock_data(stock_list,start_date,end_date):
-  for stock in stock_list:
-    try:
-      file = stock+'.csv'
-      print('Downloading data from Yahoo Finance...')
-      data = yf.download(stock, start=start_date, end=end_date)
-      pd.DataFrame(data).to_csv(file)
-    except Exception as e:
-      print("exception "+str(e)+"on "+stock)
-      print("start date = "+start_date)
-      print("end date = "+end_date)
+    '''
+        Download stock data from Yahoo Finance as listed in stock_list
+        starting from start date to end date and save to CSV file.
+        The default path is the same path as the running script.
+
+        Input:
+        - stock_list (String) : String of Yahoo Finance's ticker name separated by space. For example, stockA stockB stockC ...
+        - start_date (String) : String of start date in format DD/MM/YYYY.
+        - end_date (String) : String of end date in format DD/MM/YYYY.
+
+        Output:
+        - No return value
+        - The csv file will be written with the naming convention as ticker.csv
+
+    '''
+    for stock in stock_list:
+        try:
+            file = stock+'.csv'
+            print('Downloading data from Yahoo Finance...')
+            data = yf.download(stock, start=start_date, end=end_date)
+            pd.DataFrame(data).to_csv(file)
+        except Exception as e:
+            print("exception "+str(e)+"on "+stock)
+            print("start date = "+start_date)
+            print("end date = "+end_date)
 
 def dataset_preparation(filename, history_points, predict_range, y_normaliser, mode='file', df=None):
     '''
@@ -91,7 +106,7 @@ def get_LSTM_Model(layer_num, history_points, features_num,predict_range,optimiz
       - features_num (Number) : The number of features in the dataset.
       - predict_range (Number) : The number of day to predict the stock price.
       - optimizer (Number) : The optimizer's name e.g. adam.
-      - dropout_prob (float) : Probability to forget the date on dropout layer.
+      - dropout_prob (Float) : Probability to forget the date on dropout layer.
 
       Output:
       - model (Object) : The compiled LSTM model per the provided parameters.
@@ -114,6 +129,22 @@ def get_LSTM_Model(layer_num, history_points, features_num,predict_range,optimiz
     return model
 
 def train_test_split(ohlcv_histories, next_day_adj_close, unscaled_y,test_split = 0.9):
+    '''
+        Split the dataset to train and test dataset per provideed ratio.
+
+        Input
+        - ohlcv_histories (Array) : The dataset in array.
+        - next_day_adj_close (Array) : The result of prediction using the dataset in array.
+        - unscaled_y (Array) : The same data as next_day_adj_close but not normalize to 0-1.
+        - test_split (Float) : The ratio of train per test.
+
+        Output
+        - ohlcv_train (Array) : The train dataset splitted per test_split ratio.
+        - ohlcv_test (Array) : The test dataset splitted per test_split ratio.
+        - y_test (Array) : The result of test dataset splitted per test_split ratio.
+        - y_train (Array) : The result of train dataset splitted per test_split ratio.
+        - unscaled_y_test (Array) : The unscaled y_test per test_split ratio.
+    '''
     n = int(ohlcv_histories.shape[0] * test_split)
 
     ohlcv_train = ohlcv_histories[:n]
@@ -127,6 +158,29 @@ def train_test_split(ohlcv_histories, next_day_adj_close, unscaled_y,test_split 
     return ohlcv_train, ohlcv_test, y_test, y_train, unscaled_y_test
 
 def train_predictor(ohlcv_train,y_train,ohlcv_test,y_normaliser,unscaled_y_test,hidden_layer,batch_size,epoch,dropout_probability,history_points,features_num,predict_range):
+    '''
+        Create LSTM model per provideded parameter, fit the train data and validate its accuracy using MSE.
+        Finally, retrun the result of MSE and the model object.
+
+        Input
+        - ohlcv_train (Array) : Train dataset in array.
+        - y_train (Array) : Train dataset result in array.
+        - ohlcv_test (Array) : Test dataset in array.
+        - y_normaliser (preprocessing.MinMaxScaler Object) : The normaliser instance that is used to scale down y_test. We will use it to scale up the result from test dataset.
+        - unscaled_y_test (Array) : The unscaled y_test using for validate the result.
+        - hidden_layer (Number) : LSTM parameter's number of hidden layer.
+        - batch_size (Number) : LSTM parameter's number of batch size.
+        - epoch (Number) : LSTM parameter's number of epoch.
+        - dropout_probability (Float) : LSTM parameter's dropout probability.
+        - history_points (Number) : LSTM parameter's the number of history data to train the model in each iteration.
+        - features_num (Number) : LSTM parameter's the number of features in the dataset.
+        - predict_range : LSTM parameter's the number of predict data to be predicted.
+
+        Output
+        - model (Object) : LSTM model which can be saved to h5 or use to predict the result with the new dataset.
+        - scaled_mse (Float) : Mean Squared Error of the model measured by using the unscaled result from test dataset minus the unscaled_y_test
+
+    '''
     model = get_LSTM_Model(hidden_layer,history_points,features_num,predict_range,'adam',dropout_probability)
     model.fit(x=ohlcv_train, y=y_train, batch_size=batch_size, epochs=epoch, shuffle=True, validation_split=0.1,verbose=0)
 
@@ -138,9 +192,26 @@ def train_predictor(ohlcv_train,y_train,ohlcv_test,y_normaliser,unscaled_y_test,
     return model, scaled_mse
 
 def train_and_validate_stock_predictor(stock,history_points,predict_range,hidden_layer,batch_size,epoch,dropout_probability, mode='file'):
+    '''
+        Encapsulate all activities to create LSTM model to predict the stock with parameters as provided.
+        There are 2 mode for this function. mode='file' will read data from csv file and not add additional features like macd and EMA
+        while other mode will read data from csv but also add macd and EMA as additional features.
+        Starting from transforming data, splitting to train/test, build and fit model, evaluate the model accuracy and return result.
 
+        Input
+        - stock (String) : Ticker per Yahoo Finance.
+        - history_points (Number) : LSTM parameter's the number of history data to train the model in each iteration.
+        - predict_range : LSTM parameter's the number of predict data to be predicted.
+        - hidden_layer (Number) : LSTM parameter's number of hidden layer.
+        - batch_size (Number) : LSTM parameter's number of batch size.
+        - epoch (Number) : LSTM parameter's number of epoch.
+        - dropout_probability (Float) : LSTM parameter's dropout probability.
+
+        Output
+        - model (Object) : LSTM model which can be saved to h5 or use to predict the result with the new dataset.
+        - scaled_mse (Float) : Mean Squared Error of the model measured by using the unscaled result from test dataset minus the unscaled_y_test
+    '''
     # Read data and add MACD and EMA
-    print('Preparing Data...')
     if mode=='file':
         features_num = 5
         ohlcv_histories, next_day_adj_close, unscaled_y, y_normaliser = dataset_preparation(stock+'.csv',history_points,predict_range,preprocessing.MinMaxScaler())
@@ -151,12 +222,21 @@ def train_and_validate_stock_predictor(stock,history_points,predict_range,hidden
 
     ohlcv_train, ohlcv_test, y_test, y_train, unscaled_y_test = train_test_split(ohlcv_histories,next_day_adj_close,unscaled_y)
 
-    print('Train the model...')
     model, scaled_mse = train_predictor(ohlcv_train,y_train,ohlcv_test,y_normaliser,unscaled_y_test,hidden_layer,batch_size,epoch,dropout_probability,history_points,features_num,predict_range)
     return model, scaled_mse
 
 def add_macd_ema(df,ema1=20,ema2=50):
+    '''
+        Compute stock technical analysis indicator - MACD and EMA and add back to the dataset
 
+        Input
+        - df (DataFrame) : The DataFrame of stock data as downloaded from Yahoo Finance
+        - ema1 (Number) : The first EMA period to add to the dataset
+        - ema2 (Number) : The second EMA period to add to the dataset
+
+        Output
+        - df (DataFrame) : The DataFrame with new columns added - MACD, ema1 and ema2 e.g. MACD, 20, 50 are the default column name that will be added
+    '''
     df_close = df[['Close']]
     df_close.reset_index(level=0, inplace=True)
     df_close.columns=['ds','y']
@@ -173,8 +253,17 @@ def add_macd_ema(df,ema1=20,ema2=50):
     return df
 
 def display_test_validation_graph(unscaled_y_test, y_test_predicted):
-    # Display graph test data only
+    '''
+        Display the plot of the stock price in test dataset and the predicted data.
 
+        Input
+        - unscaled_y_test (Array) : The array of stock price in test dataset.
+        - y_test_predicted (Array) : The array of stock price as predicted.
+
+        Output
+        - No return value.
+        - The plot will be displayed on the screen.
+    '''
     plt.gcf().set_size_inches(22, 15, forward=True)
 
     start = 0
@@ -188,7 +277,21 @@ def display_test_validation_graph(unscaled_y_test, y_test_predicted):
     plt.show()
 
 def train_model(stock_list, start_date, end_date):
+    '''
+        Initial function for the user to use by provide stock list, start and end date of data to train the prediction model.
+        The function will call other function to download data from Yahoo finance per specific start and end date.
+        Then, prepare the data and build LSTM model for stock price prediction of 1,5 and 10 day using the set of parameters
+        that has been tuned that it can get some good result for SET50 and written all 3 models (per stock) to h5 file along with list of MSE of each model on the same path of the script.
 
+        Input
+        - stock_list (String) : List of ticker in space delimited format e.g. tickerA tickerB tickerC.
+        - start_date (String) : The string of start date in format DD/MM/YYYY.
+        - end_date (String) : The string of end date in format DD/MM/YYYY.
+
+        Output
+        - No return value.
+        - Print the model training progress on the screen.
+    '''
     stock_list = stock_list.split(' ')
     start_date = datetime.datetime.strptime(start_date,"%d/%m/%Y")
     end_date = datetime.datetime.strptime(end_date,"%d/%m/%Y")
@@ -263,15 +366,21 @@ def train_model(stock_list, start_date, end_date):
     pd.DataFrame(mse_list).to_csv('mse_list.csv')
 
 def query_price(stock_list,date_range):
+    '''
+        Query the predicted price from the model of the stocks that were trained by providing the stock name and the date range of prediction from the end date of training data.
+        It supports only 1,5 and 10 date range.
 
-    _home = '/content/drive/My Drive/Colab Notebooks/'
+        Input
+        - stock_list (String) : List of ticker in space delimited format e.g. tickerA tickerB tickerC.
+        - date_range (Number) : The number of date range to predict the price - 1, 5 and 10 days from end date of the training data set.
+    '''
     stock_list = stock_list.split(' ')
     df_mse = pd.read_csv(_home+'mse_list.csv')
 
     for stock in stock_list:
 
         if date_range in [1,5,10]:
-            model = load_model(_homestock+'_'+str(date_range)+'.h5')
+            model = load_model(stock+'_'+str(date_range)+'.h5')
 
             # Do prediction
             if date_range == 1:
