@@ -182,7 +182,7 @@ def train_predictor(ohlcv_train,y_train,ohlcv_test,y_normaliser,unscaled_y_test,
 
     '''
     model = get_LSTM_Model(hidden_layer,history_points,features_num,predict_range,'adam',dropout_probability)
-    model.fit(x=ohlcv_train, y=y_train, batch_size=batch_size, epochs=epoch, shuffle=True, validation_split=0.1,verbose=0)
+    model.fit(x=ohlcv_train, y=y_train, batch_size=batch_size, epochs=epoch, shuffle=True, validation_split=0.1)
 
     y_test_predicted = model.predict(ohlcv_test)
     y_test_predicted = y_normaliser.inverse_transform(y_test_predicted)
@@ -292,25 +292,36 @@ def train_model(stock_list, start_date, end_date):
         - No return value.
         - Print the model training progress on the screen.
     '''
+    
+    # Split the stock_list to array
     stock_list = stock_list.split(' ')
+    
+    # Convert string to datetime object
     start_date = datetime.datetime.strptime(start_date,"%d/%m/%Y")
     end_date = datetime.datetime.strptime(end_date,"%d/%m/%Y")
 
-    get_stock_data(stock_list, start_date, end_date)
-    mse_list = []
-
+    try:
+        get_stock_data(stock_list, start_date, end_date)
+    except Exception as e:
+        print("exception "+str(e)+"on "+stock_list)
+    
+    # Array for recording MSE from each round of training
+    mse_list = [] 
+    
+    # Train model to predict 1, 5 and 10 days using the best parameters from SET50 as found
+    # Save the trained model to h5 format to be used by query price function
     for stock in stock_list:
 
         print('start model training for stock = '+stock+'. It may take at least 5 minutes...')
 
-        # Train model for 1 day predict range
+        # Train model for 1 day predict range by using parameters that we found from our study earlier
 
         # Set up parameters for the model
         predict_range = 1
-        history_points = 30
-        hidden_layer = 80
+        history_points = 90
+        hidden_layer = 10
         batch_size = 10
-        epoch = 30
+        epoch = 90
         dropout_probability = 1.0
         mode = 'file'
 
@@ -323,15 +334,15 @@ def train_model(stock_list, start_date, end_date):
             pd.DataFrame(columns=['predict rage','stock','exception'],data=[predict_range,stock,str(e)]).to_csv('exception.csv')
             continue
 
-        # Train model for 5 days predict range
+        # Train model for 5 days predict range by using parameters that we found from our study earlier
 
         # Set up parameters for the model
         predict_range = 5
         history_points = 30
-        hidden_layer = 80
-        batch_size = 20
-        epoch = 30
-        dropout_probability = 0.1
+        hidden_layer = 70
+        batch_size = 10
+        epoch = 60
+        dropout_probability = 1.0
         mode = 'file'
 
         try:
@@ -343,14 +354,14 @@ def train_model(stock_list, start_date, end_date):
             pd.DataFrame(columns=['predict rage','stock','exception'],data=[predict_range,stock,str(e)]).to_csv('exception.csv')
             continue
 
-        # Train model for 10 days predict range
+        # Train model for 10 days predict range by using parameters that we found from our study earlier
         predict_range = 10
-        history_points = 90
-        hidden_layer = 80
-        batch_size = 20
-        epoch = 30
-        dropout_probability = 0.1
-        mode = 'df'
+        history_points = 50
+        hidden_layer = 60
+        batch_size = 10
+        epoch = 80
+        dropout_probability = 0.3
+        mode = 'file'
 
         try:
             model, scaled_mse = train_and_validate_stock_predictor(stock,history_points,predict_range,hidden_layer,batch_size,epoch,dropout_probability,mode)
@@ -374,36 +385,51 @@ def query_price(stock_list,date_range):
         - stock_list (String) : List of ticker in space delimited format e.g. tickerA tickerB tickerC.
         - date_range (Number) : The number of date range to predict the price - 1, 5 and 10 days from end date of the training data set.
     '''
+    
+    # Split the stock list to array
     stock_list = stock_list.split(' ')
-    df_mse = pd.read_csv(_home+'mse_list.csv')
+    
+    # Read MSE of the trained model for each stock and each range of prediction
+    df_mse = pd.read_csv('mse_list.csv')
+    
+    if date_range <=10:
+        for stock in stock_list:
+            
+            try:
+                
+                # Do prediction by using history_points of data as we found from our study earlier
+                if date_range == 1:
+                    predict_range = 1
+                    history_points = 90
+                    mode = 'file'
+                if date_range <= 5:
+                    predict_range = 5
+                    history_points = 30
+                    mode = 'file'
+                if date_range <= 10:
+                    predict_range = 50
+                    history_points = 90
+                    mode = 'df'
+                
+                model = load_model(stock+'_'+str(predict_range)+'.h5')
+                
+                df_stock = pd.read_csv(stock+'.csv')
+                df_stock = add_macd_ema(df_stock)
 
-    for stock in stock_list:
+                ohlcv_histories, next_day_adj_close, unscaled_y, y_normaliser = dataset_preparation(stock+'.csv',history_points,predict_range,preprocessing.MinMaxScaler(),mode=mode,df=df_stock)
 
-        if date_range in [1,5,10]:
-            model = load_model(stock+'_'+str(date_range)+'.h5')
+                adj_predicted = model.predict(ohlcv_histories[len(ohlcv_histories)-1:])
+                adj_predicted = y_normaliser.inverse_transform(adj_predicted)
 
-            # Do prediction
-            if date_range == 1:
-                predict_range = 1
-                history_points = 30
-                mode = 'file'
-            if date_range == 5:
-                predict_range = 5
-                history_points = 30
-                mode = 'file'
-            if date_range == 10:
-                predict_range = 10
-                history_points = 90
-                mode = 'df'
-
-            df_stock = pd.read_csv(stock+'.csv')
-            df_stock = add_macd_ema(df_stock)
-
-            ohlcv_histories, next_day_adj_close, unscaled_y, y_normaliser = dataset_preparation(stock+'.csv',history_points,predict_range,preprocessing.MinMaxScaler(),mode=mode,df=df_stock)
-
-            adj_predicted = model.predict(ohlcv_histories[len(ohlcv_histories)-1:])
-            adj_predicted = y_normaliser.inverse_transform(adj_predicted)
-
-    print(stock+' price prediction for '+str(date_range)+' days : '+str(adj_predicted[0]))
-    print("Mean square error = "+str(df_mse[(df_mse['0']==stock) & (df_mse['1']==predict_range)]['2'].values)+" %")
+                print(stock+' price prediction for '+str(date_range)+' days : '+str(adj_predicted[0][:date_range]))
+                print("Mean square error = "+str(df_mse[(df_mse['0']==stock) & (df_mse['1']==predict_range)]['2'].values)+" %")
+            except Exception as e:
+                print("There was an error : "+str(e))
+                continue
+                
+    else:
+        print("Support prediction from the end date of training data for 1 to 10 days only. Please try again.")
+        
+    
+            
 
