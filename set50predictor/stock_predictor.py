@@ -182,7 +182,7 @@ def train_predictor(ohlcv_train,y_train,ohlcv_test,y_normaliser,unscaled_y_test,
 
     '''
     model = get_LSTM_Model(hidden_layer,history_points,features_num,predict_range,'adam',dropout_probability)
-    model.fit(x=ohlcv_train, y=y_train, batch_size=batch_size, epochs=epoch, shuffle=True, validation_split=0.1)
+    model.fit(x=ohlcv_train, y=y_train, batch_size=batch_size, epochs=epoch, shuffle=True, validation_split=0.1,verbose=0)
 
     y_test_predicted = model.predict(ohlcv_test)
     y_test_predicted = y_normaliser.inverse_transform(y_test_predicted)
@@ -326,8 +326,11 @@ def train_model(stock_list, start_date, end_date):
         mode = 'file'
 
         try:
+            # Train the model and get the MSE result
             model, scaled_mse = train_and_validate_stock_predictor(stock,history_points,predict_range,hidden_layer,batch_size,epoch,dropout_probability,mode)
+            # Add stock, range of prediction and MSE result to the list
             mse_list.append([stock, predict_range, scaled_mse])
+            # Save the trained model to the runtime
             model.save(stock+'_'+str(predict_range)+'.h5')
         except Exception as e:
             print("exception "+str(e)+"on "+stock)
@@ -346,8 +349,11 @@ def train_model(stock_list, start_date, end_date):
         mode = 'file'
 
         try:
+            # Train the model and get the MSE result
             model, scaled_mse = train_and_validate_stock_predictor(stock,history_points,predict_range,hidden_layer,batch_size,epoch,dropout_probability,mode)
+            # Add stock, range of prediction and MSE result to the list
             mse_list.append([stock, predict_range, scaled_mse])
+            # Save the trained model to the runtime
             model.save(stock+'_'+str(predict_range)+'.h5')
         except Exception as e:
             print("exception "+str(e)+"on "+stock)
@@ -364,17 +370,20 @@ def train_model(stock_list, start_date, end_date):
         mode = 'file'
 
         try:
+            # Train the model and get the MSE result
             model, scaled_mse = train_and_validate_stock_predictor(stock,history_points,predict_range,hidden_layer,batch_size,epoch,dropout_probability,mode)
-            print("Predict {} days for {} with MSE = {}".format(str(predict_range),str(stock),str(scaled_mse)))
+            # Add stock, range of prediction and MSE result to the list
             mse_list.append([stock, predict_range, scaled_mse])
+            # Save the trained model to the runtime
             model.save(stock+'_'+str(predict_range)+'.h5')
         except Exception as e:
             print("exception "+str(e)+"on "+stock)
             pd.DataFrame(columns=['predict rage','stock','exception'],data=[predict_range,stock,str(e)]).to_csv('exception.csv')
             continue
 
-    print("Completed...")
+    # Write the list of MSE from the loop to file for displaying later in query_price
     pd.DataFrame(mse_list).to_csv('mse_list.csv')
+    print("Completed...")
 
 def query_price(stock_list,date_range):
     '''
@@ -397,30 +406,37 @@ def query_price(stock_list,date_range):
             
             try:
                 
-                # Do prediction by using history_points of data as we found from our study earlier
+                # Do prediction by using the same history_points value when the model is trained
+                # The value that we use will depend on the date_range that the user select
                 if date_range == 1:
                     predict_range = 1
                     history_points = 90
                     mode = 'file'
-                if date_range <= 5:
+                if date_range > 1 and date_range <= 5:
                     predict_range = 5
                     history_points = 30
                     mode = 'file'
-                if date_range <= 10:
-                    predict_range = 50
-                    history_points = 90
-                    mode = 'df'
+                if date_range > 5 and date_range <= 10:
+                    predict_range = 10
+                    history_points = 50
+                    mode = 'file'
                 
+                # Load the model
                 model = load_model(stock+'_'+str(predict_range)+'.h5')
                 
+                # Read the data and also add MACD and EMA (in the case that mode = df, it will be used otherwise it will be skipped)
                 df_stock = pd.read_csv(stock+'.csv')
                 df_stock = add_macd_ema(df_stock)
-
+                
+                # Prepare data to feed into the model to predict Adj Close
                 ohlcv_histories, next_day_adj_close, unscaled_y, y_normaliser = dataset_preparation(stock+'.csv',history_points,predict_range,preprocessing.MinMaxScaler(),mode=mode,df=df_stock)
 
+                # Predict the price. The resut will be normalized (0-1)
                 adj_predicted = model.predict(ohlcv_histories[len(ohlcv_histories)-1:])
+                # Scale up back to normal price
                 adj_predicted = y_normaliser.inverse_transform(adj_predicted)
 
+                # Print the result
                 print(stock+' price prediction for '+str(date_range)+' days : '+str(adj_predicted[0][:date_range]))
                 print("Mean square error = "+str(df_mse[(df_mse['0']==stock) & (df_mse['1']==predict_range)]['2'].values)+" %")
             except Exception as e:
