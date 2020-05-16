@@ -23,9 +23,9 @@ However, I haven't seen much example and result of tuning LSTM for different ran
 ## How to run this project
 This project concists of 2 Jupyter Notebooks:
 - `stock_predictor_tuning_study.ipynb` is the Jupyter Notebook that I use it to explain each steps of my work as stated in the objectives in detail.
-I recommend to go thru it to see the study and code in details. It covers the objectives 1 and 2 in this notebook.
+I recommend to go thru it to see the study and code in details. It covers the objectives 1 and 2 of the project.
 
-- `stock_predictor.ipynb` is another Jupyter Notebook that I encapsulate all of my functions into 2 simple functions where other interested person can try train the predictor for their interested stocks and get the prediction.
+- `stock_predictor.ipynb` is another Jupyter Notebook that I encapsulate all of my functions into 2 simple functions where other interested person can try train the predictor for their interested stocks and get the prediction. It covers the objectives 3 of the project.
 
 ### How to run stock_predictor_tuning_study
 1. I strongly recommended to run my notebook in Google colaboratory - https://colab.research.google.com as the notebook requires the machine that support tensorflow and this online editor already provides everything ready to use.
@@ -40,6 +40,11 @@ Create a folder under `Colab Notebooks` named **Data**.
 2. Go to https://colab.research.google.com and go to file and upload new notebook. Upload stock_predictor.ipynb.
 3. Upload `stock_predictor.py` to Files panel by drag and drop from your local computer to the root/outmost level folder.
 4. Follow how to use to do train the model and do prediction.
+
+## File Description
+1. stock_predictor_tuning_study.ipynb - The study notebook. Explore this notebook to see detail on how the parameters are tuned.
+2. stock_predictor.ipynb - The notebook for trying the result. It has less than 5.5% MSE for 40% of stocks in SET50 for 1 day prediction.
+3. stock_predictor.py - The encapsulated function for stock_predictor.ipynb.
 
 ## Result Summary
 1. One way to tune the parameter of LSTM is to iteratively adjust one by one by starting from setting every parameter at lowest and iteratively change only one parameter at a time to find the value that has lowest MSE. Then, use that parameter value along with other parameters and iterate to find the best value of the next parameter.
