@@ -1,10 +1,14 @@
 # Building & Tuning LSTM to predict stock price in SET50
 ## Background
+
 It is always be better to know the future especially in stock trading as we can plan well on when to buy and when to sell to make profit. 
 
 As I search over the internet, I found some example of using deep-learning algorithms like Long Short-Term Memory (LSTM) to predict stock price. 
 
 However, I haven't seen much example and result of tuning LSTM for different range of prediction to get the best result and also the accuracy of the model when we use it with various number of stock.
+
+The blog post about this project is as follow:
+https://medium.com/@pathompongyupensuk/tuning-lstm-to-predict-stock-price-in-set50-with-lower-than-5-5-error-e19b422304b7
 
 ## Objectives
 1. Build a stock predictor using LSTM and tune the paramters for one selected stock in predicting its Adjusted Close price in the next 1, 5 and 10 days. The way that I intend to tune the parameters are:
